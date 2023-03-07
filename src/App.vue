@@ -25,43 +25,37 @@
         </v-sheet>
       </section>
 
-      <v-sheet>
-        <section id="filter">
-          <v-container>
-            <v-row justify="space-between">
-              <v-col cols="auto">
-                <h2 class="text-h4">Ribbon Donor List</h2>
-
-                <p class="text-primary mt-3">In Beta now!</p>
-
-                <p class="mt-3">See all those that have given in one place!</p>
-              </v-col>
-            </v-row>
-            <v-row>
-              <v-col>
-                <table v-if="donors">
-                  <thead>
-                    <tr>
-                      <th class="text-left">Name</th>
-                      <th class="text-left">Email</th>
-                      <th class="text-left">Total Donations</th>
-                      <th class="text-left">First Donation</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="item in donors.data" :key="item.id">
-                      <td>{{ item.full_name }}</td>
-                      <td>{{ item.email }}</td>
-                      <td>{{ item.total_donations }}</td>
-                      <td>{{ item.first_donation }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </v-col>
-            </v-row>
-          </v-container>
-        </section>
-      </v-sheet>
+      <v-card class="mx-16 mb-16">
+        <v-card-title>
+          <h2 class="text-h4">Ribbon Donor List</h2>
+          <v-spacer></v-spacer>
+          <v-text-field
+            v-model="search"
+            append-icon="mdi-magnify"
+            label="Search"
+            single-line
+            hide-details
+          ></v-text-field>
+        </v-card-title>
+        <v-data-table :headers="headers" :items="donors.data" :search="search">
+          <template v-slot:item="i">
+            <tr>
+              <td>
+                {{ i.item.full_name }}
+              </td>
+              <td>
+                {{ i.item.email }}
+              </td>
+              <td>
+                {{ i.item.total_donations }}
+              </td>
+              <td>
+                {{ i.item.first_donation }}
+              </td>
+            </tr>
+          </template>
+        </v-data-table>
+      </v-card>
 
       <v-sheet class="py-16" color="#1818181a">
         <section id="grid">
@@ -173,9 +167,28 @@ export default {
       isShowDialog: false,
       statusMessage: "",
       isError: false,
+
+      search: "",
+      headers: [
+        {
+          text: "Name",
+          align: "start",
+          value: "full_name",
+        },
+        { text: "Email", value: "email" },
+        { text: "Total Donations", value: "total_donations" },
+        { text: "First Donation", value: "first_donation" },
+      ],
     };
   },
   mounted() {
+    axios.get("https://interview.ribbon.giving/api/donors").then((response) => {
+      this.donors = response.data;
+      this.emailList = response.data?.data.map((donor) => ({
+        text: donor.email,
+        value: donor.email,
+      }));
+    });
     axios.get("https://interview.ribbon.giving/api/donors").then((response) => {
       this.donors = response.data;
       this.emailList = response.data?.data.map((donor) => ({
@@ -242,7 +255,68 @@ export default {
         (donor) => donor.email === this.email
       );
       this.donor_id = selectedDonor.id;
+      if (!this.message || this.message.length < 15) {
+        this.isShowDialog = true;
+        this.isError = true;
+        this.statusMessage =
+          "There should be at least 15 characters in your message!";
+        return;
+      }
+
+      if (!this.email) {
+        this.isShowDialog = true;
+        this.isError = true;
+        this.statusMessage = "Please select an email!";
+        return;
+      }
+
+      if (!this.donor_id) {
+        this.isShowDialog = true;
+        this.isError = true;
+        this.statusMessage = "Invalid donor id!";
+        return;
+      }
+
+      const endpoint = `https://interview.ribbon.giving/api/donors/${this.donor_id}/send-message`;
+
+      const headers = {
+        "Content-Type": "application/json;charset=UTF-8",
+        "Access-Control-Allow-Origin": "*",
+      };
+
+      const data = {
+        message: this.message,
+      };
+
+      axios
+        .post(endpoint, data, { headers: headers })
+        .then((res) => {
+          this.isShowDialog = true;
+          this.isError = false;
+          this.statusMessage = "Submitted!";
+
+          this.message = "";
+          this.email = "";
+          this.donor_id = "";
+        })
+        .catch((err) => {
+          this.isShowDialog = true;
+          this.isError = true;
+          this.statusMessage = err;
+        });
+    },
+    emailChanged() {
+      let selectedDonor = this.donors.data.find(
+        (donor) => donor.email === this.email
+      );
+      this.donor_id = selectedDonor.id;
     },
   },
 };
 </script>
+
+<style scoped>
+::v-deep .v-data-table-header {
+  background-color: rgb(58, 58, 64, 0.05);
+}
+</style>

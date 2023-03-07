@@ -87,11 +87,17 @@
                     :rules="messageRules"
                     label="Message"
                   ></v-textarea>
-                  <v-text-field
+                  <!-- <v-text-field
                     v-model="email"
                     :rules="emailRules"
                     label="Email"
-                  ></v-text-field>
+                  ></v-text-field> -->
+                  <v-autocomplete
+                    label="Email"
+                    :items="emailList"
+                    v-model="email"
+                    @change="emailChanged"
+                  ></v-autocomplete>
                   <v-text-field
                     v-model="donor_id"
                     label="Donor Id"
@@ -114,6 +120,26 @@
         <v-icon icon="mdi-bank" size="x-large" />
       </v-container>
     </v-footer>
+
+    <v-dialog v-model="isShowDialog" max-width="290">
+      <v-card>
+        <v-card-title class="text-h5">
+          {{ isError ? "Error" : "Success" }}
+        </v-card-title>
+
+        <v-card-text>
+          {{ statusMessage }}
+        </v-card-text>
+
+        <v-card-actions>
+          <v-spacer></v-spacer>
+
+          <v-btn color="green darken-1" text @click="isShowDialog = false">
+            Close
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-app>
 </template>
 
@@ -143,16 +169,79 @@ export default {
           return "Message is required.";
         },
       ],
+      emailList: [],
+      isShowDialog: false,
+      statusMessage: "",
+      isError: false,
     };
   },
   mounted() {
-    axios
-      .get("https://interview.ribbon.giving/api/donors")
-      .then((response) => (this.donors = response.data));
+    axios.get("https://interview.ribbon.giving/api/donors").then((response) => {
+      this.donors = response.data;
+      this.emailList = response.data?.data.map((donor) => ({
+        text: donor.email,
+        value: donor.email,
+      }));
+    });
   },
   methods: {
     async submit() {
       // Send message to server.
+      if (!this.message || this.message.length < 15) {
+        this.isShowDialog = true;
+        this.isError = true;
+        this.statusMessage =
+          "There should be at least 15 characters in your message!";
+        return;
+      }
+
+      if (!this.email) {
+        this.isShowDialog = true;
+        this.isError = true;
+        this.statusMessage = "Please select an email!";
+        return;
+      }
+
+      if (!this.donor_id) {
+        this.isShowDialog = true;
+        this.isError = true;
+        this.statusMessage = "Invalid donor id!";
+        return;
+      }
+
+      const endpoint = `https://interview.ribbon.giving/api/donors/${this.donor_id}/send-message`;
+
+      const headers = {
+        "Content-Type": "application/json;charset=UTF-8",
+        "Access-Control-Allow-Origin": "*",
+      };
+
+      const data = {
+        message: this.message,
+      };
+
+      axios
+        .post(endpoint, data, { headers: headers })
+        .then((res) => {
+          this.isShowDialog = true;
+          this.isError = false;
+          this.statusMessage = "Submitted!";
+
+          this.message = "";
+          this.email = "";
+          this.donor_id = "";
+        })
+        .catch((err) => {
+          this.isShowDialog = true;
+          this.isError = true;
+          this.statusMessage = err;
+        });
+    },
+    emailChanged() {
+      let selectedDonor = this.donors.data.find(
+        (donor) => donor.email === this.email
+      );
+      this.donor_id = selectedDonor.id;
     },
   },
 };
